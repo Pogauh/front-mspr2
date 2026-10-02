@@ -1,61 +1,296 @@
+version: '3.8'
+
 services:
-
-  # ─────────────────────────────────────────────
-  # SonarQube Database
-  # ─────────────────────────────────────────────
-  sonar-db:
-    image: postgres:15-alpine
-    container_name: futurekawa_sonar_db
-    environment:
-      POSTGRES_USER: sonar
-      POSTGRES_PASSWORD: sonar
-      POSTGRES_DB: sonarqube
-    volumes:
-      - sonar_db_data:/var/lib/postgresql/data
+  # ==========================================
+  # PARTIE 1 : INFRASTRUCTURE PAYS (BRESIL)
+  # ==========================================
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: bresil-mqtt
     networks:
-      - sonar_net
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sonar -d sonarqube"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ─────────────────────────────────────────────
-  # SonarQube Server (Community Edition)
-  # ─────────────────────────────────────────────
-  sonarqube:
-    image: sonarqube:community
-    container_name: futurekawa_sonarqube
-    depends_on:
-      sonar-db:
-        condition: service_healthy
-    environment:
-      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonarqube
-      SONAR_JDBC_USERNAME: sonar
-      SONAR_JDBC_PASSWORD: sonar
+      - bresil-net
     ports:
-      - "9000:9000"
+      - "1883:1883"
     volumes:
-      - sonar_data:/opt/sonarqube/data
-      - sonar_extensions:/opt/sonarqube/extensions
-      - sonar_logs:/opt/sonarqube/logs
+      - ./mosquitto/config:/mosquitto/config
+    restart: always
+
+  db_bresil:
+    image: postgres:15-alpine
+    container_name: bresil-db
     networks:
-      - sonar_net
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"'"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
+      - bresil-net
+    environment:
+      POSTGRES_USER: admin_bresil
+      POSTGRES_PASSWORD: password_bresil
+      POSTGRES_DB: db_bresil
+    ports:
+      - "5433:5432" # Port externe 5433 pour ne pas avoir de conflit avec le siège
+    volumes:
+      - bresil_data:/var/lib/postgresql/data
+      - ./postgres/init_bresil.sql:/docker-entrypoint-initdb.d/init_bresil.sql
+
+    restart: always
+
+  adminer-bresil:
+    image: adminer
+    container_name: bresil-adminer
+    networks:
+      - bresil-net
+    ports:
+      - "8081:8080" # Accès Adminer bresil sur http://localhost:8081
+    restart: always
+
+  backend-bresil:
+    image: selimdrici/backend_future_kawa:1.1.33-SNAPSHOT
+    container_name: bresil-backend
+    networks:
+      - bresil-net
+      - global-net # Réseau partagé pour parler à la BDD du siège
+    depends_on:
+      - db_bresil
+      - mqtt-broker
+    ports:
+      - "8080:8080"
+    environment:
+      # --- Connexion Base de Données ---
+      DB_HOST: bresil-db
+      DB_PORT: 5432
+      DB_USER: admin_bresil
+      DB_PASSWORD: password_bresil
+      DB_NAME: db_bresil
+      NAME_API: bresil
+      MAIL_RESPONSABLE: ultrabaga@hotmail.com
+      MAIL_USERNAME: fe087aea0f4425a38b30689d245e504
+      MAIL_PASSWORD: 33c15ca39f5cb70fc5be569183e587dc
+      MAIL_PORT: 587
+      MAIL_HOST: in-v3.mailjet.com
+
+      # --- Configuration Métier (Surcharges) ---
+      TEMPERATURE_IDEALE: 29
+      HUMIDITE_IDEALE: 55
+      TOLERANCE_TEMPERATURE: 2
+      TOLERANCE_HUMIDITE: 5
+
+      # --- Configuration MQTT ---
+      MQTT_BROKER_URI: tcp://bresil-mqtt:1883
+      MQTT_TOPIC: futurekawa/bresil/entrepot1/data
+      SIEGE_DB_HOST: siege-db
+    restart: always
+
+
+  # ==========================================
+  # PARTIE 2 : INFRASTRUCTURE PAYS (COLOMBIE)
+  # ==========================================
+  mqtt-broker-colombie:
+    image: eclipse-mosquitto:latest
+    container_name: colombie-mqtt
+    networks:
+      - colombie-net
+    ports:
+      - "1884:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    restart: always
+
+  db_colombie:
+    image: postgres:15-alpine
+    container_name: colombie-db
+    networks:
+      - colombie-net
+    environment:
+      POSTGRES_USER: admin_colombie
+      POSTGRES_PASSWORD: password_colombie
+      POSTGRES_DB: db_colombie
+    ports:
+      - "5435:5432" # Port externe 5435 pour ne pas avoir de conflit avec le siège
+    volumes:
+      - colombie_data:/var/lib/postgresql/data
+      - ./postgres/init_colombie.sql:/docker-entrypoint-initdb.d/init_colombie.sql
+
+    restart: always
+
+  adminer-colombie:
+    image: adminer
+    container_name: colombie-adminer
+    networks:
+      - colombie-net
+    ports:
+      - "8082:8080" # Accès Adminer colombie sur http://localhost:8082
+    restart: always
+
+  backend-colombie:
+    image: selimdrici/backend_future_kawa:1.1.33-SNAPSHOT
+    container_name: colombie-backend
+    networks:
+      - colombie-net
+      - global-net # Réseau partagé pour parler à la BDD du siège
+    depends_on:
+      - db_colombie
+      - mqtt-broker-colombie
+    ports:
+      - "8079:8080"
+    environment:
+      # --- Connexion Base de Données ---
+      DB_HOST: colombie-db
+      DB_PORT: 5432
+      DB_USER: admin_colombie
+      DB_PASSWORD: password_colombie
+      DB_NAME: db_colombie
+      NAME_API: colombie
+      MAIL_RESPONSABLE: ultrabaga@hotmail.com
+      MAIL_USERNAME: fe087aea0f4425a38b30689d245e504
+      MAIL_PASSWORD: 33c15ca39f5cb70fc5be569183e587dc
+      MAIL_PORT: 587
+      MAIL_HOST: in-v3.mailjet.com
+
+      # --- Configuration Métier (Surcharges) ---
+      TEMPERATURE_IDEALE: 26
+      HUMIDITE_IDEALE: 80
+      TOLERANCE_TEMPERATURE: 2
+      TOLERANCE_HUMIDITE: 5
+
+      # --- Configuration MQTT ---
+      MQTT_BROKER_URI: tcp://colombie-mqtt:1883
+      MQTT_TOPIC: futurekawa/colombie/data
+      SIEGE_DB_HOST: siege-db
+    restart: always
+
+  # ==========================================
+  # PARTIE 3 : INFRASTRUCTURE PAYS (COLOMBIE)
+  # ==========================================
+  mqtt-broker-equateur:
+    image: eclipse-mosquitto:latest
+    container_name: equateur-mqtt
+    networks:
+      - equateur-net
+    ports:
+      - "1885:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    restart: always
+
+  db_equateur:
+    image: postgres:15-alpine
+    container_name: equateur-db
+    networks:
+      - equateur-net
+    environment:
+      POSTGRES_USER: admin_equateur
+      POSTGRES_PASSWORD: password_equateur
+      POSTGRES_DB: db_equateur
+    ports:
+      - "5436:5432" # Port externe 5436 pour ne pas avoir de conflit avec le siège
+    volumes:
+      - equateur_data:/var/lib/postgresql/data
+      - ./postgres/init_equateur.sql:/docker-entrypoint-initdb.d/init_equateur.sql
+
+    restart: always
+
+  adminer-equateur:
+    image: adminer
+    container_name: equateur-adminer
+    networks:
+      - equateur-net
+    ports:
+      - "8086:8080" # Accès Adminer equateur sur http://localhost:8082
+    restart: always
+
+  backend-equateur:
+    image: selimdrici/backend_future_kawa:1.1.33-SNAPSHOT
+    container_name: equateur-backend
+    networks:
+      - equateur-net
+      - global-net # Réseau partagé pour parler à la BDD du siège
+    depends_on:
+      - db_equateur
+      - mqtt-broker-equateur
+    ports:
+      - "8078:8080"
+    environment:
+      # --- Connexion Base de Données ---
+      DB_HOST: equateur-db
+      DB_PORT: 5432
+      DB_USER: admin_equateur
+      DB_PASSWORD: password_equateur
+      DB_NAME: db_equateur
+      NAME_API: equateur
+      MAIL_RESPONSABLE: ultrabaga@hotmail.com
+      #      MAIL_USERNAME: fe087aea0f4425a38b30689d245e5045
+      MAIL_USERNAME: fe087aea0f4425a38b30689d245e504
+      MAIL_PASSWORD: 33c15ca39f5cb70fc5be569183e587dc
+      MAIL_PORT: 587
+      MAIL_HOST: in-v3.mailjet.com
+
+      # --- Configuration Métier (Surcharges) ---
+      TEMPERATURE_IDEALE: 31
+      HUMIDITE_IDEALE: 60
+      TOLERANCE_TEMPERATURE: 2
+      TOLERANCE_HUMIDITE: 5
+
+      # --- Configuration MQTT ---
+      MQTT_BROKER_URI: tcp://equateur-mqtt:1883
+      MQTT_TOPIC: futurekawa/equateur/data
+      SIEGE_DB_HOST: siege-db
+    restart: always
+
+  # ==========================================
+  # PARTIE 4 : INFRASTRUCTURE SIÈGE
+  # ==========================================
+  db-siege:
+    image: postgres:15-alpine
+    container_name: siege-db
+    networks:
+      - global-net
+    environment:
+      POSTGRES_USER: admin_siege
+      POSTGRES_PASSWORD: password_siege
+      POSTGRES_DB: db_siege_mondial
+    ports:
+      - "5434:5432"
+    volumes:
+      - siege_data:/var/lib/postgresql/data
+      - ./postgres/init_siege.sql:/docker-entrypoint-initdb.d/init_siege.sql
+
+    restart: always
+
+  adminer-siege:
+    image: adminer
+    container_name: siege-adminer
+    networks:
+      - global-net
+    ports:
+      - "8083:8080" # Accès Adminer Siège sur http://localhost:8083
+    restart: always
+
+  backend-siege:
+    image: selimdrici/siegemspr:1.0.2-SNAPSHOT
+    container_name: siege-backend
+    networks:
+      - global-net
+    depends_on:
+      - db-siege
+    ports:
+      - "8085:8080"
+    environment:
+      DB_HOST: siege-db
+      DB_PORT: 5432
+      DB_USER: admin_siege
+      DB_PASSWORD: password_siege
+      DB_NAME: db_siege_mondial
+      NAME_API: siege
+
+      # --- VARIABLES DE COMMUNICATION INTER-CONTENEURS ---
+      URL_BRESIL: http://bresil-backend:8080/api/
+      URL_COLOMBIE: http://colombie-backend:8080/api/
+      URL_EQUATEUR: http://equateur-backend:8080/api/
+
+    restart: always
 
   # ─────────────────────────────────────────────
   # Vue.js app (build nginx)
   # ─────────────────────────────────────────────
-  app:
+  front:
     build:
       context: .
       dockerfile: Dockerfile
@@ -63,18 +298,20 @@ services:
     ports:
       - "3000:80"
     networks:
-      - sonar_net
-    depends_on:
-      sonarqube:
-        condition: service_healthy
+      - global-net
     restart: unless-stopped
 
-volumes:
-  sonar_db_data:
-  sonar_data:
-  sonar_extensions:
-  sonar_logs:
-
+# ==========================================
+# RÉSEAUX ET VOLUMES
+# ==========================================
 networks:
-  sonar_net:
-    driver: bridge
+  bresil-net: # Réseau privé du BRESIL (IoT + BDD locale + MQTT)
+  colombie-net: # Réseau privé de la COLOMBIE (IoT + BDD locale + MQTT)
+  equateur-net: # Réseau privé de la COLOMBIE (IoT + BDD locale + MQTT)
+  global-net:  # Réseau d'échange entre le Pays et le Siège
+
+volumes:
+  colombie_data:
+  equateur_data:
+  bresil_data:
+  siege_data:
