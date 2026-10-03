@@ -61,7 +61,7 @@ async function fetchReports() {
 onMounted(fetchReports)
 
 function pct(n: number) {
-  return `${(n * 100).toFixed(1)}%`
+  return `${(Math.min(Math.max(n, 0), 1) * 100).toFixed(1)}%`
 }
 </script>
 

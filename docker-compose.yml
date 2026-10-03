@@ -294,7 +294,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_MOCK: "false"
+        VITE_API_BASE_URL: /api-siege
     container_name: futurekawa_app
+    depends_on:
+      - backend-siege
     ports:
       - "3000:80"
     networks:

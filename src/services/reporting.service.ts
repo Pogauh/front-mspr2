@@ -22,6 +22,13 @@ interface BackendReportingStock {
   lotIdsUrgentFifo?: string[]
 }
 
+// Le backend renvoie un pourcentage (0-100) : on le ramène à un ratio 0-1 borné
+// pour rester cohérent avec le reste du front (seuils, mocks, affichage).
+function toRatio(percent: number | null | undefined): number {
+  if (percent == null || Number.isNaN(percent)) return 0
+  return Math.min(Math.max(percent / 100, 0), 1)
+}
+
 export const reportingService = {
   // GET /reporting/global (no parameters)
   getGlobal: async (): Promise<GlobalReport> => {
@@ -29,7 +36,7 @@ export const reportingService = {
     return {
       kpis: {
         total_lots: dto.totalLots,
-        compliance_rate: dto.complianceRate,
+        compliance_rate: toRatio(dto.complianceRate),
         active_alerts: 0,
         avg_age_days: dto.avgAgeDays,
         movements_last_30d: dto.countMouvementLast30Days,
@@ -67,7 +74,7 @@ export const reportingService = {
       `/reporting/quality?${countryQs}startDate=${startDate}&endDate=${endDate}`,
     )
     return {
-      compliance_rate: dto.complianceRate,
+      compliance_rate: toRatio(dto.complianceRate),
       total_alerts: dto.alertCount,
       incidents: dto.nonComplianceCount,
       by_zone: [],
