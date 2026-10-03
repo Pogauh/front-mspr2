@@ -21,7 +21,7 @@ describe('reportingService.getGlobal', () => {
     mockGet.mockResolvedValue({
       totalLots: 120,
       avgAgeDays: 45,
-      complianceRate: 0.92,
+      complianceRate: 92,
       countMouvementLast30Days: 30,
     })
 
@@ -40,7 +40,7 @@ describe('reportingService.getGlobal', () => {
 describe('reportingService.getStock', () => {
   it('includes country and date range in the query string', async () => {
     // Arrange
-    mockGet.mockResolvedValue({ totalLots: 50, avgAgeDays: 30, complianceRate: 0.9 })
+    mockGet.mockResolvedValue({ totalLots: 50, avgAgeDays: 30, complianceRate: 90 })
 
     // Act
     await reportingService.getStock({ country_id: 'COLOMBIE', startDate: '2024-01-01T00:00:00', endDate: '2024-01-31T23:59:59' })
@@ -68,7 +68,7 @@ describe('reportingService.getStock', () => {
     mockGet.mockResolvedValue({
       totalLots: 10,
       avgAgeDays: 100,
-      complianceRate: 0.8,
+      complianceRate: 80,
       lotIdsUrgentFifo: ['l-1', 'l-2', 'l-3'],
     })
 
@@ -83,7 +83,7 @@ describe('reportingService.getStock', () => {
 describe('reportingService.getQuality', () => {
   it('maps backend quality DTO to the frontend QualityReport shape', async () => {
     // Arrange
-    mockGet.mockResolvedValue({ alertCount: 5, complianceRate: 0.88, nonComplianceCount: 2 })
+    mockGet.mockResolvedValue({ alertCount: 5, complianceRate: 88, nonComplianceCount: 2 })
 
     // Act
     const result = await reportingService.getQuality()
@@ -97,7 +97,7 @@ describe('reportingService.getQuality', () => {
 
   it('includes date range in the query string', async () => {
     // Arrange
-    mockGet.mockResolvedValue({ alertCount: 0, complianceRate: 1, nonComplianceCount: 0 })
+    mockGet.mockResolvedValue({ alertCount: 0, complianceRate: 100, nonComplianceCount: 0 })
 
     // Act
     await reportingService.getQuality({ from: '2024-01-01', to: '2024-01-31' })
@@ -107,5 +107,13 @@ describe('reportingService.getQuality', () => {
     const calledWith = mockGet.mock.calls[0]?.[0]
     expect(calledWith).toContain('startDate=2024-01-01T00:00:00')
     expect(calledWith).toContain('endDate=2024-01-31T23:59:59')
+  })
+})
+
+describe('compliance rate normalisation', () => {
+  it('borne le taux à 100% même si le backend renvoie plus', async () => {
+    mockGet.mockResolvedValue({ totalLots: 1, avgAgeDays: 1, complianceRate: 10000, countMouvementLast30Days: 0 })
+    const result = await reportingService.getGlobal()
+    expect(result.kpis.compliance_rate).toBe(1)
   })
 })

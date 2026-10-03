@@ -3,10 +3,6 @@ import { mockFetch } from '@/mocks/handlers'
 const BASE_URL = import.meta.env.VITE_API_BASE_URL as string
 const IS_MOCK = import.meta.env.VITE_MOCK === 'true'
 
-// Auth endpoints are always mocked - the backend exposes no auth API.
-// Use a URL the mock handler can parse (it splits on "/api" to extract the path).
-const AUTH_PATHS = new Set(['/auth/login', '/auth/logout', '/auth/me'])
-
 let _token: string | null = null
 let _onUnauthorized: (() => void) | null = null
 
@@ -34,9 +30,7 @@ async function request<T>(
   const fullUrl = `${BASE_URL}${path}`
 
   let response: Response
-  if (AUTH_PATHS.has(path)) {
-    response = await mockFetch(`http://localhost/api${path}`, { ...options, headers })
-  } else if (IS_MOCK) {
+  if (IS_MOCK) {
     response = await mockFetch(fullUrl, { ...options, headers })
   } else {
     response = await fetch(fullUrl, { ...options, headers })

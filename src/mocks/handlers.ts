@@ -43,7 +43,7 @@ export async function mockFetch(url: string, options: RequestInit = {}): Promise
 
   // Extraire le path sans la base URL (gère /api-siege/... et http://localhost/api/...)
   const stripped = url.replace(/^https?:\/\/[^/]+/, '')
-  const path = stripped.replace(/^\/api(?:-siege)?/, '') || '/'
+  const path = stripped.replace(/^\/api-siege/, '').replace(/^\/api(?=\/auth\/)/, '') || '/'
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
