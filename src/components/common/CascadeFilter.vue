@@ -6,6 +6,11 @@ import { geoService } from '@/services/geo.service'
 import type { Country, Farm, Warehouse, Zone } from '@/types/geo.types'
 import { storeToRefs } from 'pinia'
 
+const props = withDefaults(defineProps<{ showFarm?: boolean; showZone?: boolean }>(), {
+  showFarm: true,
+  showZone: true,
+})
+
 const filtersStore = useFiltersStore()
 const authStore = useAuthStore()
 const { countryId, farmId, warehouseId, zoneId } = storeToRefs(filtersStore)
@@ -76,6 +81,7 @@ function resetFilters() {
     </select>
 
     <select
+      v-if="props.showFarm"
       :value="farmId"
       @change="filtersStore.setFarm(($event.target as HTMLSelectElement).value || undefined)"
     >
@@ -92,6 +98,7 @@ function resetFilters() {
     </select>
 
     <select
+      v-if="props.showZone"
       :value="zoneId"
       @change="filtersStore.setZone(($event.target as HTMLSelectElement).value || undefined)"
       :disabled="!warehouseId"

@@ -2,15 +2,19 @@
 import { ref, onMounted, watch } from 'vue'
 import { useAlertsStore } from '@/stores/alerts.store'
 import { useAuthStore } from '@/stores/auth.store'
+import { useFiltersStore } from '@/stores/filters.store'
 import { alertsService } from '@/services/alerts.service'
 import type { Alert, AlertType } from '@/types/alert.types'
 import Pagination from '@/components/common/Pagination.vue'
+import CascadeFilter from '@/components/common/CascadeFilter.vue'
 import { storeToRefs } from 'pinia'
 
 const alertsStore = useAlertsStore()
 const { alerts: storeAlerts } = storeToRefs(alertsStore)
 const authStore = useAuthStore()
 const { autoFilters } = storeToRefs(authStore)
+const filtersStore = useFiltersStore()
+const { countryId, warehouseId } = storeToRefs(filtersStore)
 
 const alerts = ref<Alert[]>([])
 const total = ref(0)
@@ -30,8 +34,9 @@ async function fetchAlerts() {
       type: typeFilter.value || undefined,
       page: page.value,
       limit,
-      country_id: autoFilters.value.country_id,
-      warehouse_id: autoFilters.value.warehouse_ids?.[0],
+      // country_id absent => tous les pays ; warehouse_id absent => tous les entrepôts
+      country_id: countryId.value ?? autoFilters.value.country_id,
+      warehouse_id: warehouseId.value,
     })
     alerts.value = res.data
     total.value = res.total
@@ -51,7 +56,7 @@ async function markRead(id: string) {
 }
 
 onMounted(fetchAlerts)
-watch([typeFilter, activeOnly], () => { page.value = 1; fetchAlerts() })
+watch([typeFilter, activeOnly, countryId, warehouseId], () => { page.value = 1; fetchAlerts() })
 watch(page, fetchAlerts)
 
 const TYPE_LABEL: Record<AlertType, string> = {
@@ -66,6 +71,7 @@ const TYPE_LABEL: Record<AlertType, string> = {
     <h2>Alerts</h2>
 
     <div class="filters-bar">
+      <CascadeFilter :show-farm="false" :show-zone="false" />
       <label class="checkbox-label">
         <input type="checkbox" v-model="activeOnly" />
         Active only

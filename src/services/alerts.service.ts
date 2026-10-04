@@ -1,3 +1,4 @@
+
 import { api } from './api'
 import { geoService } from './geo.service'
 import type { Alert, AlertFilters, AlertType } from '@/types/alert.types'
@@ -31,40 +32,57 @@ function mapAlert(b: BackendAlert): Alert {
   }
 }
 
-async function buildZoneMap(filters: AlertFilters): Promise<Record<string, string>> {
-  try {
-    if (filters.warehouse_id) {
-      const zones = await geoService.getZones(filters.warehouse_id, filters.country_id)
-      return Object.fromEntries(zones.map((z) => [z.id, z.name]))
-    }
-    if (filters.country_id) {
-      const warehouses = await geoService.getWarehouses({ country_id: filters.country_id })
-      const allZones = await Promise.all(
-        warehouses.map((w) => geoService.getZones(w.id, filters.country_id).catch(() => [])),
-      )
-      return Object.fromEntries(allZones.flat().map((z) => [z.id, z.name]))
-    }
-  } catch {
-    // enrichissement best-effort
-  }
-  return {}
+// GET /alertes exige `pays` ET `idEntrepot` : on résout donc la liste des couples
+// (pays, entrepôt) à interroger selon les filtres fournis.
+interface AlertTarget {
+  country: string
+  warehouseId: string
+  warehouseName?: string
+}
+
+async function resolveTargets(filters: AlertFilters): Promise<AlertTarget[]> {
+  const { country_id, warehouse_id } = filters
+  if (country_id && warehouse_id) return [{ country: country_id, warehouseId: warehouse_id }]
+
+  // Pas de pays => tous les pays ; pas d'entrepôt => tous les entrepôts du/des pays
+  const warehouses = await geoService.getWarehouses(country_id ? { country_id } : undefined)
+  const selected = warehouse_id ? warehouses.filter((w) => w.id === warehouse_id) : warehouses
+  return selected.map((w) => ({ country: w.country_id, warehouseId: w.id, warehouseName: w.name }))
+}
+
+async function fetchForTarget(t: AlertTarget): Promise<Alert[]> {
+  const qs = new URLSearchParams({ pays: t.country, idEntrepot: t.warehouseId })
+  const [raw, zones] = await Promise.all([
+    api.get<BackendAlert[]>(`/alertes?${qs.toString()}`),
+    // enrichissement best-effort (nom des zones)
+    geoService.getZones(t.warehouseId, t.country).catch(() => []),
+  ])
+  const zoneMap = Object.fromEntries(zones.map((z) => [z.id, z.name]))
+  return raw.map((b) => ({
+    ...mapAlert(b),
+    zone_name: b.idZone ? zoneMap[b.idZone] : undefined,
+    warehouse_id: t.warehouseId,
+    warehouse_name: t.warehouseName,
+    country_id: t.country,
+  }))
 }
 
 export const alertsService = {
-  // GET /alertes?pays=...&idEntrepot=...
+  // GET /alertes?pays=...&idEntrepot=... (les deux sont obligatoires côté backend)
+  // Sans filtre, on agrège tous les entrepôts de tous les pays.
   getAlerts: async (filters: AlertFilters = {}): Promise<PaginatedResponse<Alert>> => {
-    const qs = new URLSearchParams()
-    if (filters.country_id) qs.set('pays', filters.country_id)
-    if (filters.warehouse_id) qs.set('idEntrepot', filters.warehouse_id)
-    const query = qs.size ? `?${qs.toString()}` : ''
-    const alerts = await api.get<BackendAlert[]>(`/alertes${query}`)
-    let mapped = alerts.map(mapAlert)
+    const targets = await resolveTargets(filters)
+    const results = await Promise.allSettled(targets.map(fetchForTarget))
 
-    const zoneMap = await buildZoneMap(filters)
-    mapped = mapped.map((a) => ({
-      ...a,
-      zone_name: a.zone_id ? zoneMap[a.zone_id] : undefined,
-    }))
+    // Si tout échoue, on remonte l'erreur ; sinon on affiche ce qui a pu être chargé
+    const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (targets.length > 0 && failed.length === targets.length) throw failed[0]!.reason
+
+    const byId = new Map<string, Alert>()
+    for (const r of results) {
+      if (r.status === 'fulfilled') r.value.forEach((a) => byId.set(a.id, a))
+    }
+    let mapped = [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at))
 
     if (filters.active !== undefined) mapped = mapped.filter((a) => a.is_active === filters.active)
     if (filters.type) mapped = mapped.filter((a) => a.type === filters.type)

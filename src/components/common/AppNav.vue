@@ -16,20 +16,8 @@ async function handleLogout() {
 
 <template>
   <nav class="nav">
-    <div class="nav-brand" v-if="role === 'quality'">
-      <RouterLink to="/quality" class="brand-link">🌿 FutureKawa</RouterLink>
-    </div>
-    <div class="nav-brand" v-if="role === 'farm_manager'">
-      <RouterLink to="/farm" class="brand-link">🌿 FutureKawa</RouterLink>
-    </div>
-    <div class="nav-brand" v-if="role === 'warehouse_manager'">
-      <RouterLink to="/home" class="brand-link">🌿 FutureKawa</RouterLink>
-    </div>
-    <div class="nav-brand" v-if="role === 'supply_chain'">
-      <RouterLink to="/supply-chain" class="brand-link">🌿 FutureKawa</RouterLink>
-    </div>
-    <div class="nav-brand" v-if="role === 'hq'">
-      <RouterLink to="/hq" class="brand-link">🌿 FutureKawa</RouterLink>
+    <div class="nav-brand">
+      <RouterLink to="/dashboard" class="brand-link">🌿 FutureKawa</RouterLink>
     </div>
 
     <ul class="nav-links">

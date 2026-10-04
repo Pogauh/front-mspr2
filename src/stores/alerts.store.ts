@@ -20,8 +20,8 @@ export const useAlertsStore = defineStore('alerts', () => {
       const res = await alertsService.getAlerts({
         active: true,
         limit: 100,
+        // pas de pays => tous les pays ; le service interroge chaque entrepôt
         country_id: authStore.autoFilters.country_id,
-        warehouse_id: authStore.autoFilters.warehouse_ids?.[0],
       })
       alerts.value = res.data
     } catch {

@@ -15,10 +15,12 @@ vi.mock('./geo.service', () => ({
 }))
 
 import { api } from './api'
+import { geoService } from './geo.service'
 import { alertsService } from './alerts.service'
 
 const mockGet = vi.mocked(api.get)
 const mockPatch = vi.mocked(api.patch)
+const mockGetWarehouses = vi.mocked(geoService.getWarehouses)
 
 const makeBackendAlert = (overrides = {}) => ({
   idAlerte: 'a-1',
@@ -32,6 +34,7 @@ const makeBackendAlert = (overrides = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mockGet.mockResolvedValue([makeBackendAlert()])
+  mockGetWarehouses.mockResolvedValue([{ id: 'wh-1', name: 'Bogota Warehouse', country_id: 'COLOMBIE' }])
 })
 
 describe('alertsService.getAlerts', () => {
@@ -142,6 +145,73 @@ describe('alertsService.getAlerts', () => {
     expect(mockGet).toHaveBeenCalledWith(
       expect.stringContaining('idEntrepot=wh-1'),
     )
+  })
+})
+
+describe('alertsService.getAlerts - target resolution', () => {
+  it('queries every warehouse of every country when no filter is given', async () => {
+    // Arrange
+    mockGetWarehouses.mockResolvedValue([
+      { id: 'wh-1', name: 'A', country_id: 'COLOMBIE' },
+      { id: 'wh-2', name: 'B', country_id: 'BRESIL' },
+    ])
+    mockGet.mockImplementation(async (url: string) =>
+      url.includes('wh-1')
+        ? [makeBackendAlert({ idAlerte: 'a-1' })]
+        : [makeBackendAlert({ idAlerte: 'a-2' })],
+    )
+
+    // Act
+    const { data, total } = await alertsService.getAlerts()
+
+    // Assert
+    expect(mockGetWarehouses).toHaveBeenCalledWith(undefined)
+    expect(total).toBe(2)
+    expect(data.map((a) => a.country_id).sort()).toEqual(['BRESIL', 'COLOMBIE'])
+  })
+
+  it('queries only the warehouses of the given country', async () => {
+    // Act
+    await alertsService.getAlerts({ country_id: 'COLOMBIE' })
+
+    // Assert
+    expect(mockGetWarehouses).toHaveBeenCalledWith({ country_id: 'COLOMBIE' })
+    expect(mockGet).toHaveBeenCalledWith('/alertes?pays=COLOMBIE&idEntrepot=wh-1')
+  })
+
+  it('does not resolve warehouses when country and warehouse are both given', async () => {
+    // Act
+    await alertsService.getAlerts({ country_id: 'COLOMBIE', warehouse_id: 'wh-9' })
+
+    // Assert
+    expect(mockGetWarehouses).not.toHaveBeenCalled()
+    expect(mockGet).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps partial results when one warehouse fails', async () => {
+    // Arrange
+    mockGetWarehouses.mockResolvedValue([
+      { id: 'wh-1', name: 'A', country_id: 'COLOMBIE' },
+      { id: 'wh-2', name: 'B', country_id: 'BRESIL' },
+    ])
+    mockGet.mockImplementation(async (url: string) => {
+      if (url.includes('wh-2')) throw new Error('Forbidden')
+      return [makeBackendAlert()]
+    })
+
+    // Act
+    const { data } = await alertsService.getAlerts()
+
+    // Assert
+    expect(data).toHaveLength(1)
+  })
+
+  it('throws when every warehouse request fails', async () => {
+    // Arrange
+    mockGet.mockRejectedValue(new Error('Forbidden'))
+
+    // Act + Assert
+    await expect(alertsService.getAlerts()).rejects.toThrow('Forbidden')
   })
 })
 

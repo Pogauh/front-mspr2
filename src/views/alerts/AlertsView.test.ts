@@ -43,7 +43,7 @@ function mountAlerts() {
           initialState: { auth: { user: null } },
         }),
       ],
-      stubs: { Pagination: true },
+      stubs: { Pagination: true, CascadeFilter: true },
     },
   })
 }
