@@ -32,7 +32,7 @@ async function handleLogout() {
       </template>
 
       <!-- HQ / Siège -->
-      <template v-if="role === 'hq'">
+      <template v-if="role === 'hq' || role === 'admin'">
         <li>
           <RouterLink to="/quality">Quality</RouterLink>
         </li>
@@ -40,8 +40,16 @@ async function handleLogout() {
           <RouterLink to="/supply-chain">Supply Chain</RouterLink>
         </li>
       </template>
+
+      <!-- Admin: every other page -->
+      <template v-if="role === 'admin'">
+        <li><RouterLink to="/hq">HQ</RouterLink></li>
+        <li><RouterLink to="/farm">Farm</RouterLink></li>
+        <li><RouterLink to="/warehouse">Warehouse</RouterLink></li>
+        <li><RouterLink to="/monitoring">Monitoring</RouterLink></li>
+      </template>
       <li>
-        <RouterLink to="/lots" v-if="role === 'quality' || role === 'warehouse_manager' || role === 'supply_chain'">
+        <RouterLink to="/lots" v-if="role === 'quality' || role === 'warehouse_manager' || role === 'supply_chain' || role === 'admin'">
           Lots
         </RouterLink>
       </li>

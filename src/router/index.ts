@@ -70,6 +70,7 @@ router.beforeEach((to) => {
   }
 
   const role = auth.role
+  if (role === 'admin') return true // admin can access every page
   for (const [pattern, allowedRoles] of Object.entries(ROLE_ACCESS)) {
     if (pathMatchesPattern(to.path, pattern)) {
       if (allowedRoles === null) return true

@@ -35,7 +35,7 @@ describe('authService.login', () => {
     expect(mockGet).toHaveBeenCalledWith('/api/auth/me')
     expect(result).toEqual({
       token: 'tok-123',
-      user: { id: 'u-1', email: 'admin@siege.fr', name: 'admin@siege.fr', role: 'hq', country_id: undefined },
+      user: { id: 'u-1', email: 'admin@siege.fr', name: 'admin@siege.fr', role: 'admin', country_id: undefined },
     })
   })
 

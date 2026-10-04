@@ -4,6 +4,7 @@ export type UserRole =
   | 'quality'
   | 'supply_chain'
   | 'hq'
+  | 'admin'
 
 export interface User {
   id: string

@@ -14,24 +14,16 @@ interface BackendMe {
   countryId?: string | null
 }
 
-// Backend roles -> front roles (admin gets the widest view, HQ)
-const ROLE_MAP: Record<string, UserRole> = {
-  ROLE_ADMIN: 'hq',
-  ROLE_HEADQUARTER: 'hq',
-  ROLE_WAREHOUSE_MANAGER: 'warehouse_manager',
-  ROLE_QUALITY: 'quality',
-  ROLE_SUPPLY_CHAIN: 'supply_chain',
-  ROLE_OPERATION_MANAGER: 'farm_manager',
-}
+// Backend roles are the front roles, upper-cased with a ROLE_ prefix (ROLE_FARM_MANAGER -> farm_manager)
+const toFrontRole = (r: string) => r.replace(/^ROLE_/, '').toLowerCase() as UserRole
 
 function toUser(data: BackendMe | User): User {
   if ('role' in data) return data // already a front User (mock layer)
-  const backendRole = data.roles?.find((r) => ROLE_MAP[r])
   return {
     id: data.id,
     email: data.email,
     name: data.email,
-    role: backendRole ? ROLE_MAP[backendRole] : 'hq',
+    role: toFrontRole(data.roles[0] ?? ''),
     country_id: data.countryId ?? undefined,
   }
 }

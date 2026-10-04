@@ -17,6 +17,7 @@ const roleLabel: Record<string, string> = {
   quality: 'Quality Team',
   supply_chain: 'Supply Chain',
   hq: 'HQ / Management',
+  admin: 'Administrator',
 }
 
 const quickLinks = computed(() => {
@@ -27,6 +28,14 @@ const quickLinks = computed(() => {
     quality: [{ to: '/quality', label: 'Quality' }, { to: '/monitoring', label: 'Monitoring' }],
     supply_chain: [{ to: '/supply-chain', label: 'Supply Chain' }],
     hq: [{ to: '/hq', label: 'Global reporting' }],
+    admin: [
+      { to: '/hq', label: 'Global reporting' },
+      { to: '/farm', label: 'Farm' },
+      { to: '/warehouse', label: 'Warehouse' },
+      { to: '/quality', label: 'Quality' },
+      { to: '/supply-chain', label: 'Supply Chain' },
+      { to: '/monitoring', label: 'Monitoring' },
+    ],
   }
   return [...base, ...(role.value ? (roleLinks[role.value] ?? []) : [])]
 })
