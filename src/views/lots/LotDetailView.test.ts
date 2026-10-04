@@ -53,6 +53,7 @@ function mountDetail(id = 'lot-1') {
         StatusBadge: { template: '<span class="status-badge"><slot /></span>' },
         ThresholdDot: { template: '<span />' },
         ReadingChart: true,
+        LotHistory: true,
       },
     },
   })

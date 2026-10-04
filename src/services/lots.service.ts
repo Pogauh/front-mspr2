@@ -141,11 +141,11 @@ export const lotsService = {
 
   getLot: async (id: string, country_id?: string): Promise<Lot> => {
     const lot = await api.get<BackendLot>(`/lot/${id}`).then(mapLot)
-    const [[enriched], reading] = await Promise.all([
+    const [enrichedLots, reading] = await Promise.all([
       enrichWithNames([lot], country_id),
       readingsService.getLatestReading(id),
     ])
-    const withOverride = applyStatusOverride(enriched)
+    const withOverride = applyStatusOverride(enrichedLots[0] ?? lot)
     if (!reading) return withOverride
     return {
       ...withOverride,

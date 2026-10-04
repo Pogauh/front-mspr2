@@ -186,7 +186,7 @@ VITE_MOCK=false
 VITE_API_BASE_URL=/api-siege
 ```
 
-The Vite dev server proxies `/api-siege` to `http://localhost:8082` (configured in `vite.config.ts`):
+The Vite dev server proxies `/api-siege` to `http://localhost:8085` (configured in `vite.config.ts`):
 
 ```ts
 server: {
