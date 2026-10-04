@@ -11,6 +11,8 @@ export interface Lot {
   warehouse_name?: string
   zone_id?: string
   zone_name?: string
+  quantity?: number
+  characteristic?: number
   production_date: string
   storage_date?: string
   status: LotStatus

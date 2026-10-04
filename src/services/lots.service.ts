@@ -25,6 +25,8 @@ function mapLot(b: BackendLot): Lot {
     warehouse_id: b.idEntrepot,
     // emplacement peut contenir un UUID de zone ou un nom texte - résolu dans enrichWithNames
     zone_id: b.emplacement,
+    quantity: b.quantite,
+    characteristic: b.caracteristique,
     production_date: b.dateProduction ?? '',
     storage_date: b.dateStockage,
     status: b.status ?? 'pending',

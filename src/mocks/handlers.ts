@@ -125,6 +125,11 @@ export async function mockFetch(url: string, options: RequestInit = {}): Promise
     return ok(warehouses.map((w) => ({ idEntrepot: String(w.id), nom: w.name })))
   }
 
+  // lot history: GET /history/{idLot}
+  if (method === 'GET' && path.startsWith('/history/')) {
+    return ok([])
+  }
+
   // ── Zones readings latest ─────────────────────────────────────────────────
 
   if (method === 'GET' && path.includes('/readings/latest')) {

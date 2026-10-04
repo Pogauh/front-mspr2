@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useFiltersStore } from '@/stores/filters.store'
+import { useAuthStore } from '@/stores/auth.store'
 import { readingsService } from '@/services/readings.service'
 import { geoService } from '@/services/geo.service'
 import type { WarehouseReadingSummary } from '@/types/reading.types'
@@ -11,6 +12,7 @@ import { storeToRefs } from 'pinia'
 
 const filtersStore = useFiltersStore()
 const { warehouseId } = storeToRefs(filtersStore)
+const { autoFilters } = storeToRefs(useAuthStore())
 
 const warehouses = ref<Warehouse[]>([])
 const selectedWarehouseId = ref<string | undefined>(undefined)
@@ -24,9 +26,10 @@ const selectedCountryId = computed(
 )
 
 async function loadWarehouses() {
-  warehouses.value = await geoService.getWarehouses()
-  if (warehouseId.value) selectedWarehouseId.value = warehouseId.value
-  else if (warehouses.value.length) selectedWarehouseId.value = warehouses.value[0].id
+  // A user bound to a country only sees the warehouses of that country
+  warehouses.value = await geoService.getWarehouses({ country_id: autoFilters.value.country_id })
+  const stored = warehouses.value.find((w) => w.id === warehouseId.value)
+  selectedWarehouseId.value = stored?.id ?? warehouses.value[0]?.id
   if (selectedWarehouseId.value) loadSummary()
 }
 

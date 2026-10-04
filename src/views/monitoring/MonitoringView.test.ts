@@ -35,13 +35,16 @@ const makeSummary = (warehouseId: string) => ({
   ],
 })
 
-function mountMonitoring() {
+function mountMonitoring(countryId?: string) {
   return mount(MonitoringView, {
     global: {
       plugins: [
         createTestingPinia({
           createSpy: vi.fn,
-          initialState: { filters: { warehouseId: undefined } },
+          initialState: {
+            filters: { warehouseId: undefined },
+            auth: { user: { id: 'u-1', name: 'Bob', role: 'warehouse_manager', country_id: countryId }, token: 'tok' },
+          },
           stubActions: false,
         }),
       ],
@@ -60,6 +63,15 @@ beforeEach(() => {
 })
 
 describe('MonitoringView', () => {
+  it('only loads the warehouses of the user country', async () => {
+    // Arrange + Act
+    mountMonitoring('COLOMBIE')
+    await flushPromises()
+
+    // Assert
+    expect(mockGetWarehouses).toHaveBeenCalledWith({ country_id: 'COLOMBIE' })
+  })
+
   it('renders warehouse tabs after loading', async () => {
     // Arrange + Act
     const wrapper = mountMonitoring()
