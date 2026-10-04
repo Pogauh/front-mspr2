@@ -16,6 +16,12 @@ vi.mock('@/services/movements.service', () => ({
   },
 }))
 
+vi.mock('@/services/geo.service', () => ({
+  geoService: {
+    getWarehouses: vi.fn().mockResolvedValue([]),
+  },
+}))
+
 import { lotsService } from '@/services/lots.service'
 import { movementsService } from '@/services/movements.service'
 

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { lotsService } from '@/services/lots.service'
 import { movementsService } from '@/services/movements.service'
+import { geoService } from '@/services/geo.service'
 import type { Lot } from '@/types/lot.types'
+import type { Warehouse } from '@/types/geo.types'
 import type { StockOutType } from '@/types/movement.types'
 import LotTable from '@/components/common/LotTable.vue'
 import { storeToRefs } from 'pinia'
@@ -17,6 +19,16 @@ const stockOutLotId = ref<string | null>(null)
 const stockOutType = ref<StockOutType>('shipment')
 const submitting = ref(false)
 const successMsg = ref('')
+const warehouses = ref<Warehouse[]>([])
+const warehouseId = ref('')
+
+async function fetchWarehouses() {
+  try {
+    warehouses.value = await geoService.getWarehouses({ country_id: autoFilters.value.country_id })
+  } catch {
+    warehouses.value = []
+  }
+}
 
 async function fetchLots() {
   loading.value = true
@@ -24,6 +36,7 @@ async function fetchLots() {
     const res = await lotsService.getLots({
       farm_id: autoFilters.value.farm_id,
       country_id: autoFilters.value.country_id,
+      warehouse_id: warehouseId.value || undefined,
       sort: 'storage_date_asc',
       limit: 50,
     })
@@ -51,7 +64,11 @@ async function handleStockOut() {
   }
 }
 
-onMounted(fetchLots)
+onMounted(() => {
+  fetchWarehouses()
+  fetchLots()
+})
+watch(warehouseId, fetchLots)
 </script>
 
 <template>
@@ -86,7 +103,13 @@ onMounted(fetchLots)
     </div>
 
     <div class="section">
-      <h3>Farm status</h3>
+      <div class="status-header">
+        <h3>Farm status</h3>
+        <select v-model="warehouseId" aria-label="Filter by warehouse">
+          <option value="">- All warehouses -</option>
+          <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+        </select>
+      </div>
       <LotTable :lots="lots" :loading="loading" :show-zone="false" :show-readings="false" />
     </div>
   </div>
@@ -176,5 +199,17 @@ select {
 
 .section {
   margin-top: 1.5rem;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.status-header h3 {
+  margin: 0;
 }
 </style>

@@ -99,6 +99,8 @@ export const lotsService = {
     if (filters.warehouse_id) mapped = mapped.filter((l) => l.warehouse_id === filters.warehouse_id)
     if (filters.zone_id) mapped = mapped.filter((l) => l.zone_id === filters.zone_id)
     if (filters.farm_id) mapped = mapped.filter((l) => l.farm_id === filters.farm_id)
+    const search = filters.search?.trim().toLowerCase()
+    if (search) mapped = mapped.filter((l) => l.batch_number.toLowerCase().includes(search))
 
     if (filters.sort === 'storage_date_asc') {
       mapped.sort((a, b) => (a.storage_date ?? '').localeCompare(b.storage_date ?? ''))
@@ -156,18 +158,21 @@ export const lotsService = {
 
   createLot: (payload: {
     farm_id: string
+    zone_id: string
     pays: string
     status: string
     quantite: number
     caracteristique: number
+    date_production: string
   }): Promise<void> => {
     const qs = new URLSearchParams({ pays: payload.pays }).toString()
     return api.post<void>(`/lot?${qs}`, {
-      idExploitation: payload.farm_id,
       status: payload.status,
       quantite: payload.quantite,
       caracteristique: payload.caracteristique,
-      dateProduction: new Date().toISOString().split('T')[0],
+      dateProduction: payload.date_production,
+      idExploitation: payload.farm_id,
+      idZone: payload.zone_id,
     })
   },
 

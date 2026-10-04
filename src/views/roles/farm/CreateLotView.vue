@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth.store'
 import { lotsService } from '@/services/lots.service'
 import { geoService } from '@/services/geo.service'
-import type { Farm } from '@/types/geo.types'
+import type { Farm, Warehouse, Zone } from '@/types/geo.types'
 import { storeToRefs } from 'pinia'
 
 const router = useRouter()
@@ -12,18 +12,30 @@ const authStore = useAuthStore()
 const { autoFilters } = storeToRefs(authStore)
 
 const farms = ref<Farm[]>([])
+const warehouses = ref<Warehouse[]>([])
+const zones = ref<Zone[]>([])
 const selectedFarmId = ref('')
+const selectedWarehouseId = ref('')
+const selectedZoneId = ref('')
 const status = ref('pending')
 const quantite = ref(0)
 const caracteristique = ref(0)
+const dateProduction = ref(new Date().toISOString().split('T')[0] as string)
 const loading = ref(false)
 const error = ref('')
 
 onMounted(async () => {
-  if (autoFilters.value.country_id) {
-    farms.value = await geoService.getFarms(autoFilters.value.country_id)
+  const country = autoFilters.value.country_id
+  if (country) {
+    farms.value = await geoService.getFarms(country)
+    warehouses.value = await geoService.getWarehouses({ country_id: country })
   }
   selectedFarmId.value = autoFilters.value.farm_id ?? ''
+})
+
+watch(selectedWarehouseId, async (id) => {
+  selectedZoneId.value = ''
+  zones.value = id ? await geoService.getZones(id, autoFilters.value.country_id) : []
 })
 
 async function handleSubmit() {
@@ -31,15 +43,21 @@ async function handleSubmit() {
     error.value = 'Please select a farm'
     return
   }
+  if (!selectedZoneId.value) {
+    error.value = 'Please select a zone'
+    return
+  }
   loading.value = true
   error.value = ''
   try {
     await lotsService.createLot({
       farm_id: selectedFarmId.value,
+      zone_id: selectedZoneId.value,
       pays: autoFilters.value.country_id,
       status: status.value,
       quantite: quantite.value,
       caracteristique: caracteristique.value,
+      date_production: dateProduction.value,
     })
     router.push('/farm')
   } catch (e: unknown) {
@@ -65,14 +83,35 @@ async function handleSubmit() {
       </div>
 
       <div class="field">
+        <label>Warehouse *</label>
+        <select v-model="selectedWarehouseId" required>
+          <option value="">- Select a warehouse -</option>
+          <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Zone *</label>
+        <select v-model="selectedZoneId" required :disabled="!selectedWarehouseId">
+          <option value="">- Select a zone -</option>
+          <option v-for="z in zones" :key="z.id" :value="z.id">{{ z.name }}</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Production date *</label>
+        <input type="date" v-model="dateProduction" required />
+      </div>
+
+      <div class="field">
         <label>Status *</label>
         <select v-model="status" required>
-          <option value="pending">Pending</option>
-          <option value="stored">Stored</option>
-          <option value="compliant">Compliant</option>
-          <option value="alert">Alert</option>
-          <option value="blocked">Blocked</option>
-          <option value="shipped">Shipped</option>
+          <option value="PENDING">Pending</option>
+          <option value="STORED">Stored</option>
+          <option value="COMPLIANT">Compliant</option>
+          <option value="ALERT">Alert</option>
+          <option value="BLOCKED">Blocked</option>
+          <option value="SHIPPED">Shipped</option>
         </select>
       </div>
 

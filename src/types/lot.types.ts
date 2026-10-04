@@ -28,6 +28,7 @@ export interface LotFilters {
   warehouse_id?: string
   zone_id?: string
   status?: LotStatus
+  search?: string
   page?: number
   limit?: number
   sort?: 'storage_date_asc' | 'storage_date_desc' | 'production_date_asc'

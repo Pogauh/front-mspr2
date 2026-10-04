@@ -20,6 +20,13 @@ const page = ref(1)
 const limit = 20
 const loading = ref(false)
 const statusFilter = ref('')
+const searchInput = ref('')
+const search = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+watch(searchInput, (v) => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => { search.value = v.trim() }, 300)
+})
 const availableStatuses = computed(() => [...new Set(lots.value.map((l) => l.status))])
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Pending', stored: 'Stored', compliant: 'Compliant',
@@ -36,6 +43,7 @@ async function fetchLots() {
       warehouse_id: warehouseId.value,
       zone_id: zoneId.value,
       status: statusFilter.value || undefined,
+      search: search.value || undefined,
       sort: 'storage_date_asc',
       page: page.value,
       limit,
@@ -49,7 +57,7 @@ async function fetchLots() {
 }
 
 onMounted(fetchLots)
-watch([countryId, farmId, warehouseId, zoneId, statusFilter], () => { page.value = 1; fetchLots() })
+watch([countryId, farmId, warehouseId, zoneId, statusFilter, search], () => { page.value = 1; fetchLots() })
 watch(page, fetchLots)
 </script>
 
@@ -63,6 +71,13 @@ watch(page, fetchLots)
     </div>
 
     <div class="filters-bar">
+      <input
+        v-model="searchInput"
+        type="search"
+        class="search-input"
+        placeholder="Search by lot number…"
+        aria-label="Search by lot number"
+      />
       <CascadeFilter />
       <select v-model="statusFilter" class="status-filter">
         <option value="">- All statuses -</option>
@@ -85,6 +100,7 @@ watch(page, fetchLots)
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
 h2 { margin: 0; font-size: 1.4rem; }
 .filters-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+.search-input { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; min-width: 220px; }
 .status-filter { padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; }
 .btn-primary {
   padding: 8px 16px;

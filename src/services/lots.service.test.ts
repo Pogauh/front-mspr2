@@ -171,17 +171,23 @@ describe('lotsService.createLot', () => {
     // Act
     await lotsService.createLot({
       farm_id: 'farm-1',
+      zone_id: 'zone-1',
       pays: 'COLOMBIE',
       status: 'pending',
       quantite: 100,
       caracteristique: 85,
+      date_production: '2026-10-04',
     })
 
     // Assert
-    expect(mockPost).toHaveBeenCalledWith(
-      expect.stringContaining('pays=COLOMBIE'),
-      expect.objectContaining({ idExploitation: 'farm-1', quantite: 100 }),
-    )
+    expect(mockPost).toHaveBeenCalledWith(expect.stringContaining('pays=COLOMBIE'), {
+      status: 'pending',
+      quantite: 100,
+      caracteristique: 85,
+      dateProduction: '2026-10-04',
+      idExploitation: 'farm-1',
+      idZone: 'zone-1',
+    })
   })
 })
 

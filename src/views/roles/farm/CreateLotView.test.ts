@@ -15,6 +15,12 @@ vi.mock('@/services/geo.service', () => ({
     getFarms: vi.fn().mockResolvedValue([
       { id: 'farm-1', name: 'Pepper Farm', country_id: 'COLOMBIE' },
     ]),
+    getWarehouses: vi.fn().mockResolvedValue([
+      { id: 'wh-1', name: 'Main Warehouse', country_id: 'COLOMBIE' },
+    ]),
+    getZones: vi.fn().mockResolvedValue([
+      { id: 'zone-1', name: 'Zone A', warehouse_id: 'wh-1' },
+    ]),
   },
 }))
 
@@ -96,15 +102,34 @@ describe('CreateLotView', () => {
     const pushSpy = vi.spyOn(router, 'push')
 
     // Act - select a farm and submit
-    await wrapper.find('select').setValue('farm-1')
+    const selects = wrapper.findAll('select')
+    await selects[0]!.setValue('farm-1')
+    await selects[1]!.setValue('wh-1')
+    await flushPromises()
+    await wrapper.findAll('select')[2]!.setValue('zone-1')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
     // Assert
     expect(mockCreateLot).toHaveBeenCalledWith(
-      expect.objectContaining({ farm_id: 'farm-1', pays: 'COLOMBIE' }),
+      expect.objectContaining({ farm_id: 'farm-1', zone_id: 'zone-1', pays: 'COLOMBIE' }),
     )
     expect(pushSpy).toHaveBeenCalledWith('/farm')
+  })
+
+  it('shows an error when submitting without selecting a zone', async () => {
+    // Arrange
+    const wrapper = mountCreate('COLOMBIE')
+    await flushPromises()
+
+    // Act
+    await wrapper.find('select').setValue('farm-1')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    // Assert
+    expect(wrapper.find('.error').text()).toBe('Please select a zone')
+    expect(mockCreateLot).not.toHaveBeenCalled()
   })
 
   it('shows an error message when createLot fails', async () => {
@@ -114,7 +139,11 @@ describe('CreateLotView', () => {
     await flushPromises()
 
     // Act
-    await wrapper.find('select').setValue('farm-1')
+    const selects = wrapper.findAll('select')
+    await selects[0]!.setValue('farm-1')
+    await selects[1]!.setValue('wh-1')
+    await flushPromises()
+    await wrapper.findAll('select')[2]!.setValue('zone-1')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
