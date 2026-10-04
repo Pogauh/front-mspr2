@@ -10,7 +10,7 @@
 #   stages                    → jobs with needs: to enforce order
 #   parallel jobs             → jobs with the same needs: (run in parallel)
 #   image: sonarsource/...    → docker run in the step (Windows runner)
-#   tags: [local]             → runs-on: self-hosted
+#   tags: [local]             → runs-on: self-hosted (sonar only)
 #   artifacts: paths:         → actions/upload-artifact + download-artifact
 #   artifacts: when: always   → if: always() on upload steps
 #   allow_failure: false      → default behavior (no continue-on-error)
@@ -39,7 +39,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   build:
     name: Build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Code checkout
@@ -73,7 +73,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   test:
     name: Unit tests (Vitest)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: build
 
     steps:
@@ -113,7 +113,7 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   e2e:
     name: E2E tests (Playwright)
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [test]
     continue-on-error: true
 
@@ -131,7 +131,7 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       - name: E2E tests
         run: npm run test:e2e
@@ -161,7 +161,10 @@ jobs:
     name: SonarQube Analysis
     runs-on: self-hosted
     needs: [e2e]
-    if: ${{ always() && !cancelled() }}
+    # Opt-in: only runs when a self-hosted runner is registered and the repository
+    # variable SONAR_ENABLED is 'true' (Settings > Secrets and variables > Actions > Variables).
+    # Otherwise the job is skipped instead of staying queued forever.
+    if: ${{ vars.SONAR_ENABLED == 'true' && always() && !cancelled() }}
 
     steps:
       - name: Code checkout
@@ -231,9 +234,9 @@ jobs:
   # ─────────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deployment
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: [sonar, docker]
-    if: ${{ github.ref_name == 'main' && github.event_name == 'push' && needs.sonar.result == 'success' && needs.docker.result == 'success' }}
+    if: ${{ always() && github.ref_name == 'main' && github.event_name == 'push' && (needs.sonar.result == 'success' || needs.sonar.result == 'skipped') && needs.docker.result == 'success' }}
     environment: production
 
     steps:
