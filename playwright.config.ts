@@ -23,5 +23,7 @@ export default defineConfig({
     command: 'npm run dev:e2e',
     url: 'http://localhost:5174',
     reuseExistingServer: !process.env.CI,
+    // .env.e2e is git-ignored (.env*) so it does not exist in CI: pass the mock settings explicitly
+    env: { VITE_MOCK: 'true', VITE_API_BASE_URL: '/api-siege' },
   },
 })
