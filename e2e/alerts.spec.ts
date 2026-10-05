@@ -42,7 +42,8 @@ test.describe('Alerts', () => {
   test('type filter changes the visible alerts', async ({ page }) => {
     await page.goto('/alerts')
 
-    const typeFilter = page.locator('select').first()
+    // The country/warehouse filters come first on the page: target the type select by its options
+    const typeFilter = page.locator('select').filter({ has: page.locator('option[value="threshold"]') })
     await typeFilter.selectOption('threshold')
 
     await expect(page).toHaveURL('/alerts')
