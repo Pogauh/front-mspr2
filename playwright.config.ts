@@ -19,10 +19,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Uses .env.e2e which sets VITE_MOCK=true (runs on 5174 to avoid conflict with dev server on 5173)
-    command: 'npm run dev:e2e',
+    // Local: dev server on 5174 (no conflict with the dev server on 5173).
+    // CI: build once and serve the static bundle - much faster than the dev server,
+    // which compiles every page on first request.
+    command: process.env.CI
+      ? 'npm run build-only && npm run preview -- --port 5174 --strictPort'
+      : 'npm run dev:e2e',
     url: 'http://localhost:5174',
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
     // .env.e2e is git-ignored (.env*) so it does not exist in CI: pass the mock settings explicitly
     env: { VITE_MOCK: 'true', VITE_API_BASE_URL: '/api-siege' },
   },
