@@ -1,7 +1,7 @@
 # Installation Guide - FutureKawa Frontend
 
 > **Audience:** Developers, DevOps engineers, and technical contributors.  
-> **Repository:** [github.com/JaceyStew6/MSPR-Dev-Front-FutureKawa](https://github.com/JaceyStew6/MSPR-Dev-Front-FutureKawa)
+> **Repository:** [github.com/Pogauh/front-mspr2](https://github.com/Pogauh/front-mspr2)
 
 ---
 
@@ -33,7 +33,8 @@
 | State Management | [Pinia](https://pinia.vuejs.org/) | `^3.0` |
 | Routing | [Vue Router](https://router.vuejs.org/) | `^5.0` |
 | Charting | [Chart.js](https://www.chartjs.org/) | `^4.4` |
-| Testing | [Vitest](https://vitest.dev/) + [@vue/test-utils](https://test-utils.vuejs.org/) | `^4.1` |
+| Unit testing | [Vitest](https://vitest.dev/) + [@vue/test-utils](https://test-utils.vuejs.org/) | `^4.1` |
+| E2E testing | [Playwright](https://playwright.dev/) (Chromium) | `^1.61` |
 | Formatting | [Prettier](https://prettier.io/) | `3.8` |
 | Type checking | vue-tsc | `^3.2` |
 | Container | Docker (multi-stage) + nginx | alpine |
@@ -63,14 +64,14 @@
                                    │  HTTP / REST
                     ┌──────────────▼──────────────────┐
                     │   nginx reverse proxy (Docker)  │
-                    │   /api-siege/ → backend:8082    │
+                    │   /api-siege/ → backend-siege   │
                     └─────────────────────────────────┘
                                    │
                                    │
                                    │                    
                           ┌────────▼──────┐   
                           │  Siège API    │   
-                          │  :8082        │   
+                          │  :8080        │   
                           └───────────────┘   
 ```
 
@@ -90,8 +91,8 @@ src/
 ├── assets/           # Static CSS (base.css, main.css) and SVG logo
 ├── components/
 │   ├── charts/       # ReadingChart.vue - Chart.js temperature/humidity graph
-│   └── common/       # Shared UI: AppNav, AlertBadge, LotTable, CascadeFilter,
-│                     #            Pagination, StatusBadge, ThresholdDot
+│   └── common/       # Shared UI: AppNav, AlertBadge, LotTable, LotHistory,
+│                     #            CascadeFilter, Pagination, StatusBadge, ThresholdDot
 ├── config/
 │   └── routes.ts     # Role → default redirect map (ROLE_DEFAULT_ROUTES)
 ├── mocks/
@@ -104,6 +105,7 @@ src/
 │   ├── auth.service.ts
 │   ├── alerts.service.ts
 │   ├── geo.service.ts
+│   ├── history.service.ts   # Lot history (GET /history/{idLot})
 │   ├── lots.service.ts
 │   ├── movements.service.ts
 │   ├── readings.service.ts
@@ -128,7 +130,20 @@ src/
 │       ├── supply-chain/SupplyChainView.vue
 │       └── hq/HQView.vue
 ├── App.vue           # Root component - mounts AppNav + RouterView
-└── main.ts           # App bootstrap: Vue, Pinia, Router, MSW (mock)
+└── main.ts           # App bootstrap: Vue, Pinia, Router
+```
+
+Unit tests live next to the code they cover (`*.test.ts`, e.g. `services/lots.service.test.ts`).
+
+Other folders and files at the repository root:
+
+```
+e2e/                       # Playwright end-to-end tests (*.spec.ts, fixtures.ts, pages/ page objects)
+docs/                      # architecture.png, Contributing.md, SONARQUBE_SETUP.md
+public/user-guide.pdf      # End-user guide (English), opened from the help button of the navigation bar
+.github/workflows/ci.yml   # CI: build, unit tests + coverage, E2E tests, SonarQube (optional), Docker image
+Dockerfile · nginx.conf    # Production image (Node build stage, nginx serve stage) and /api-siege proxy
+vite.config.ts · vitest.config.ts · playwright.config.ts · sonar-project.properties
 ```
 
 ---
@@ -150,15 +165,14 @@ src/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/JaceyStew6/MSPR-Dev-Front-FutureKawa.git
-cd MSPR-Dev-Front-FutureKawa
+git clone https://github.com/Pogauh/front-mspr2.git
+cd front-mspr2
 
 # 2. Install dependencies
 npm install
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env - see Section 6
+# 3. Configure environment: create a .env file at the project root (no template is
+#    versioned, .env* is git-ignored) with the variables of Section 6
 
 # 4. Start the dev server
 npm run dev
@@ -186,13 +200,13 @@ VITE_MOCK=false
 VITE_API_BASE_URL=/api-siege
 ```
 
-The Vite dev server proxies `/api-siege` to `http://localhost:8085` (configured in `vite.config.ts`):
+The Vite dev server proxies `/api-siege` to `http://localhost:8085` (configured in `vite.config.ts`), the port of the HQ (siège) API (`docker compose up -d` in `backend-siege`, or `SERVER_PORT=8085` when it is run from Maven):
 
 ```ts
 server: {
   proxy: {
     '/api-siege': {
-      target: 'http://localhost:8082',
+      target: 'http://localhost:8085',
       changeOrigin: true,
       rewrite: (path) => path.replace(/^\/api-siege/, ''),
     },
@@ -200,7 +214,7 @@ server: {
 },
 ```
 
-> **Never commit `.env`** - it is listed in `.gitignore`. Only `.env.example` should be versioned.
+> **Never commit `.env`** - it is listed in `.gitignore` (`.env*`), so no `.env.example` template is versioned: create `.env` by hand from the examples above.
 
 ---
 
@@ -217,15 +231,13 @@ All `fetch` calls are intercepted by `src/mocks/handlers.ts`, which routes reque
 
 **Pre-configured mock users:**
 
-| Email | Password | Role |
-|---|---|---|
-| `farm@futurekawa.com` | `test` | Farm Manager |
-| `warehouse@futurekawa.com` | `test` | Warehouse Manager |
-| `quality@futurekawa.com` | `test` | Quality Team |
-| `supply@futurekawa.com` | `test` | Supply Chain |
-| `hq@futurekawa.com` | `test` | HQ |
-
-> **Note:** the `auth` endpoints (`/auth/login`, `/auth/logout`, `/auth/me`) are **always mocked**, regardless of `VITE_MOCK`, because the backend does not expose an authentication API.
+| Email | Password | Role                |
+|---|--------|---------------------|
+| `farm@futurekawa.com` | `test` | Farm Manager        |
+| `warehouse@futurekawa.com` | `test` | Warehouse Manager   |
+| `quality@futurekawa.com` | `test` | Quality Team        |
+| `supply@futurekawa.com` | `test` | Supply Chain        |
+| `hq@futurekawa.com` | `test` | HQ                  |
 
 ---
 
@@ -239,6 +251,10 @@ All `fetch` calls are intercepted by `src/mocks/handlers.ts`, which routes reque
 | Build only | `npm run build-only` | Production bundle without type check |
 | Preview | `npm run preview` | Serve the `dist/` folder locally |
 | Unit tests | `npm run test:unit` | Run Vitest in watch mode |
+| Unit tests + coverage | `npm run test:coverage` | Run Vitest once with V8 coverage (`coverage/`) |
+| E2E tests | `npm run test:e2e` | Run the Playwright tests (Chromium, mock backend) |
+| E2E tests (UI) | `npm run test:e2e:ui` | Open the Playwright UI to run and debug the E2E tests |
+| Dev server (E2E) | `npm run dev:e2e` | Vite on port 5174 in `e2e` mode; started automatically by Playwright |
 | Lint | `npm run lint` | Run oxlint then ESLint (both with `--fix`) |
 | Format | `npm run format` | Run Prettier on `src/` |
 
@@ -280,6 +296,8 @@ Both are run with `--fix` - the majority of issues are auto-corrected.
 
 ## 10. Running Tests
 
+### Unit tests (Vitest)
+
 ```bash
 # Run tests once
 npx vitest run
@@ -287,15 +305,35 @@ npx vitest run
 # Run in watch mode (recommended during development)
 npm run test:unit
 
-# Run with coverage report
-npx vitest run --coverage
+# Run once with coverage report (same as: npx vitest run --coverage)
+npm run test:coverage
 ```
 
 Coverage is generated in `coverage/` using the V8 provider. Reports are output in three formats: `lcov`, `text` (console), and `html`.
 
 The lcov report (`coverage/lcov.info`) is the one consumed by SonarQube.
 
-**Test environment:** jsdom (browser-like DOM emulation via Vitest's `environment: 'jsdom'` config).
+**Test environment:** jsdom (browser-like DOM emulation via Vitest's `environment: 'jsdom'` config). The `e2e/` folder is excluded from Vitest (`vitest.config.ts`).
+
+### End-to-end tests (Playwright)
+
+The E2E tests drive the real application in Chromium against the in-memory mock layer (`VITE_MOCK=true`): no backend is needed.
+
+```bash
+# One-time setup: download the Chromium browser used by Playwright
+npx playwright install chromium
+
+# Run all E2E tests (headless)
+npm run test:e2e
+
+# Interactive mode (Playwright UI)
+npm run test:e2e:ui
+```
+
+- Specs are in `e2e/` (`auth`, `dashboard`, `lots`, `alerts`, `navigation`), with a `LoginPage` page object in `e2e/pages/` and shared helpers in `e2e/fixtures.ts`.
+- Playwright starts its own dev server on port **5174** (`npm run dev:e2e`, so it does not clash with `npm run dev` on 5173) and reuses it if it is already running. In CI it builds the bundle once and serves it with `vite preview` instead.
+- Tests run sequentially (single worker) to avoid cross-test pollution of the in-memory mock state.
+- An HTML report is written to `playwright-report/`; screenshots are kept on failure and traces on the first retry (2 retries in CI).
 
 ---
 
@@ -309,17 +347,21 @@ docker build -t futurekawa-frontend .
 
 The `Dockerfile` is a two-stage build:
 
-1. **Stage 1 (builder):** Node 22 Alpine - installs dependencies and runs `npm run build-only`, producing the `dist/` folder.
+1. **Stage 1 (builder):** Node 22 Alpine - installs dependencies and runs `npm run build-only`, producing the `dist/` folder. `VITE_MOCK` and `VITE_API_BASE_URL` are frozen at build time: pass them with `--build-arg` if the defaults (`false` and `/api-siege`) do not suit you.
 2. **Stage 2 (serve):** nginx Alpine - copies `dist/` and the custom `nginx.conf`, listens on port 80.
 
 ### nginx proxy
 
-`nginx.conf` forwards `/api-siege/` requests to the backend (`host.docker.internal:8082` by default) and serves the SPA with HTML5 history mode (`try_files $uri $uri/ /index.html`).
+`nginx.conf` forwards `/api-siege/` requests to `http://backend-siege:8080/` (the HQ API service, container port 8080) with the `/api-siege` prefix removed, and serves the SPA with HTML5 history mode (`try_files $uri $uri/ /index.html`).
 
-### Docker Compose (with SonarQube)
+nginx resolves the `backend-siege` host name when it starts: the container only starts on a Docker network where a service with that name exists, which is the case in the full stack below.
+
+### Full stack (Docker Compose)
+
+The complete demo stack is started from the **`backend-siege`** repository, not from this one. It brings up the three country backends (each with Mosquitto, PostgreSQL and Adminer), the HQ backend (with its PostgreSQL and Adminer) and this frontend, all from Docker Hub images.
 
 ```bash
-# Start all services (app + SonarQube + PostgreSQL for Sonar)
+# In the backend-siege repository
 docker compose up -d
 
 # Check status
@@ -328,12 +370,12 @@ docker compose ps
 
 | Service | URL | Description |
 |---|---|---|
-| `app` | http://localhost:3000 | Vue.js SPA served by nginx |
-| `sonarqube` | http://localhost:9000 | SonarQube (default login: `admin` / `admin`) |
-| `sonar-db` | - | PostgreSQL for SonarQube (internal only) |
+| Frontend | http://localhost:3000 | Vue.js SPA served by nginx |
+| HQ backend (siège) | http://localhost:8085 | REST API used by the frontend (Swagger UI: `/swagger-ui/index.html`) |
 
-> **Linux users:** you may need to increase `vm.max_map_count` for SonarQube:  
-> `sudo sysctl -w vm.max_map_count=524288`
+### SonarQube
+
+SonarQube is not started by this repository. Use the `sonar` profile of the backend repositories (`docker compose --profile sonar up -d`): it serves [http://localhost:9000](http://localhost:9000) (default login `admin` / `admin` on first start) and a single instance is enough for the three projects. Then see Section 12.
 
 ---
 
@@ -349,6 +391,12 @@ Static analysis is configured in `sonar-project.properties`.
 | `sonar.sources` | `src/` |
 | `sonar.javascript.lcov.reportPaths` | `coverage/lcov.info` |
 | `sonar.qualitygate.wait` | `true` - scanner fails if the Quality Gate is not passed |
+
+**CI gate (when Sonar is enabled).** In `.github/workflows/ci.yml`, the `sonar` job also checks that the overall coverage reported by
+SonarQube is at least `COVERAGE_MIN` (80 %), and the `docker` job depends on it: the image is built and pushed only if the Quality Gate and
+the coverage threshold both pass. When the repository variable `SONAR_ENABLED` is not `true`, the `sonar` job is skipped and does not block
+the image. If the self-hosted runner is offline while `SONAR_ENABLED` is `true`, the pipeline waits for it and nothing is published: set the
+variable back to `false` in that case.
 
 **Running the scanner locally:**
 
@@ -368,29 +416,39 @@ docker run --rm \
 
 ## 13. Backend API Contract
 
-The frontend expects a REST API that follows these conventions:
+The frontend talks to a single backend: the **HQ (siège) API**, reached through `/api-siege` (Vite proxy in development, nginx in Docker; the prefix is removed before forwarding). The HQ API aggregates the country backends. Its complete contract (routes, roles, response shapes) is documented in the README of the `backend-siege` repository (Section 7) and in its Swagger UI (`http://localhost:8085/swagger-ui/index.html`).
 
-- **Auth:** `POST /auth/login` → `{ token, user }` - still mocked client-side
-- **Bearer token:** all authenticated requests send `Authorization: Bearer <token>`
-- **Pagination:** responses for list endpoints follow `{ data: T[], total: number, page: number, limit: number }`
-- **Error format:** `{ message: string }` with appropriate HTTP status code
+**Conventions**
 
-Key API paths used by the frontend:
+- **Auth:** `POST /api/auth/login` returns `{ token }`, then `GET /api/auth/me` returns `{ id, email, roles, countryId }`. The token is a JWT (24 h) sent as `Authorization: Bearer <token>` on every call. There is no logout endpoint: the session is dropped client side, and a `401` response logs the user out automatically.
+- **No server-side filtering or pagination:** list endpoints return plain arrays (`GET /lots` returns every lot of every country). The services filter, sort and paginate in the browser and build the `{ data, total, page, limit }` pages used by the views.
+- **Country scope:** write calls and several reads take a `pays` query parameter (country name, for example `bresil`); the HQ API relays the call to that country backend.
+- **Errors:** the HQ API often answers an error with a `403` and no body (see its README). `services/api.ts` throws an `Error` carrying the `message` of the JSON body when there is one, otherwise `HTTP <status>`. Some routes answer `200` with an empty body or an empty list when a country does not respond, so the views must handle empty results.
 
-| Path | Method | Description |
-|---|---|---|
-| `/auth/login` | POST | Authenticate user |
-| `/auth/logout` | POST | Invalidate session |
-| `/auth/me` | GET | Get current user |
-| `/lots` | GET | List lots (filterable) |
-| `/lots/:id` | GET | Get lot detail |
-| `/countries` | GET | List countries |
-| `/farms/:pays` | GET | List farms for a country |
-| `/warehouses` | GET | List warehouses |
-| `/zones/:warehouseId` | GET | List zones |
-| `/movements` | GET | List movements |
-| `/alerts` | GET | List alerts |
-| `/readings/warehouse/:id/summary` | GET | IoT live summary |
-| `/reporting/global` | GET | Global KPIs |
-| `/reporting/stock` | GET | Stock KPIs |
-| `/reporting/quality` | GET | Quality KPIs |
+**API paths used by the frontend**
+
+| Path | Method | Description | Roles |
+|---|---|---|---|
+| `/api/auth/login` | POST | Authenticate, returns the JWT | public |
+| `/api/auth/me` | GET | Current user | any authenticated user |
+| `/lots` | GET | All lots, oldest storage date first | any |
+| `/lot/{id}` | GET | Lot detail | any |
+| `/lot?pays=` | POST | Create a lot | ADMIN, FARM_MANAGER |
+| `/lot/{id}/status?pays=` | PUT | Change the status of a lot (`{ status }`) | ADMIN, WAREHOUSE_MANAGER, QUALITY |
+| `/lot/{id}/zones?pays=` | PUT | Move a lot to another zone (`{ idZone }`) | ADMIN, WAREHOUSE_MANAGER |
+| `/mouvements/stockout?idLot=&pays=` | POST | Ship a lot (stock-out) | ADMIN, WAREHOUSE_MANAGER, FARM_MANAGER |
+| `/lot/{id}/mesures` | GET | Temperature and humidity readings of a lot | any |
+| `/history/{idLot}?type=` | GET | History of a lot (`TRANSFERT`, `ALERTE`, `SHIPPED`) | any |
+| `/readings/{idZone}/?pays=&startDate=&endDate=` | GET | Readings of a zone over a period (the trailing `/` is required) | any |
+| `/zones/{idZone}/readings/latest?pays=` | GET | Latest reading of a zone | any |
+| `/warehouses/{idEntrepot}/readings/summary?pays=` | GET | Per zone: last values and 24 h averages | any |
+| `/countries` | GET | Configured countries and their ideal ranges | any |
+| `/farms/{pays}` | GET | Farms of a country | any |
+| `/warehouses/{pays}` | GET | Warehouses of a country | any |
+| `/warehouses/{idEntrepot}/zones?pays=` | GET | Zones of a warehouse | any |
+| `/alertes?idEntrepot=&startDate=&endDate=` | GET | Alerts of a warehouse (dates optional) | ADMIN, WAREHOUSE_MANAGER, FARM_MANAGER, QUALITY, SUPPLY_CHAIN |
+| `/reporting/global` | GET | Global KPIs | ADMIN, HQ |
+| `/reporting/stock?pays=&startDate=&endDate=` | GET | Stock KPIs (country required) | ADMIN, SUPPLY_CHAIN, HQ |
+| `/reporting/quality?startDate=&endDate=` | GET | Quality KPIs (`pays` optional) | ADMIN, QUALITY, HQ |
+
+In mock mode (`VITE_MOCK=true`) the same calls are answered by `src/mocks/handlers.ts`.

@@ -299,6 +299,11 @@ where SonarQube listens on port 9000.
 The files `sonar-report.json` and `sonar-issues.json` are uploaded as artifacts
 (7 days retention), accessible in the repo **Actions > run > Artifacts** tab.
 
+**Minimum coverage before the Docker image.** After the scan, the step `Checking minimum coverage` reads the overall coverage from the
+SonarQube API (`/api/measures/component?metricKeys=coverage`) and fails the job below `COVERAGE_MIN` (80). The `docker` job has
+`needs: [build, test, e2e, sonar]` and only runs if `sonar` succeeded or was skipped, so with `SONAR_ENABLED=true` the image is neither
+built nor pushed when the Quality Gate or the coverage threshold fails.
+
 ---
 
 ## Step 8 - Trigger the pipeline

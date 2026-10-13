@@ -1,10 +1,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # CI/CD - FutureKawa Frontend
 #
-# Pipeline: build ──► test ──┬──► e2e ──► sonar ──┐
-#                            └──► docker ─────────┴──► deploy (main only)
+# Pipeline: build ──► test ──► e2e ──► sonar (optional) ──► docker
 #
-# The Docker image is pushed to Docker Hub from main only.
+# The Docker image is built (and pushed to Docker Hub from main only) only if the build and the tests pass
+# AND Sonar is either skipped (SONAR_ENABLED is not 'true') or passed: Quality Gate OK and overall coverage >= 80 %.
 #
 # GitLab CI equivalences → GitHub Actions:
 #   stages                    → jobs with needs: to enforce order
@@ -149,7 +149,6 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
-
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -168,6 +167,9 @@ jobs:
   # sonar.qualitygate.wait=true (sonar-project.properties): scanner waits for the result and returns exit code 1 if the Quality Gate fails.
   # JSON reports are uploaded even on failure (if: always()).
   # GitLab: artifacts: when: always
+  # Minimum coverage: after the scan, the step "Checking minimum coverage" reads the overall coverage from SonarQube
+  # and fails the job below COVERAGE_MIN (80 %) or when no coverage is reported.
+  # The docker job needs this job: when Sonar is enabled, a failure here blocks the image build and push.
   # ─────────────────────────────────────────────────────────────────────────────
   sonar:
     name: SonarQube Analysis
@@ -177,6 +179,8 @@ jobs:
     # variable SONAR_ENABLED is 'true' (Settings > Secrets and variables > Actions > Variables).
     # Otherwise the job is skipped instead of staying queued forever.
     if: ${{ vars.SONAR_ENABLED == 'true' && always() && !cancelled() }}
+    env:
+      COVERAGE_MIN: '80'   # minimum overall coverage (%) required before the image is built
 
     steps:
       - name: Code checkout
@@ -201,6 +205,39 @@ jobs:
             -e SONAR_HOST_URL=http://host.docker.internal:9000 ^
             -v "%GITHUB_WORKSPACE%:/usr/src" ^
             sonarsource/sonar-scanner-cli:latest
+
+      # Coverage threshold: the Quality Gate alone only checks the new code, so the overall coverage is read from the API.
+      # A missing coverage value (lcov report not imported) also fails. ASCII messages: the Windows runner console is not UTF-8.
+      - name: Checking minimum coverage
+        shell: powershell
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: futurekawa-frontend
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $min = [double]$env:COVERAGE_MIN
+          $inv = [Globalization.CultureInfo]::InvariantCulture
+          $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($env:SONAR_TOKEN + ':'))
+          $uri = "http://localhost:9000/api/measures/component?component=$($env:SONAR_PROJECT_KEY)&metricKeys=coverage"
+          try {
+            $res = Invoke-RestMethod -Uri $uri -Headers @{ Authorization = "Basic $auth" }
+          } catch {
+            Write-Host "::error title=SonarQube API::Cannot read the coverage ($($_.Exception.Message)). If SONAR_TOKEN is an analysis token, use a User Token instead."
+            exit 1
+          }
+          $measure = $res.component.measures | Where-Object { $_.metric -eq 'coverage' } | Select-Object -First 1
+          if (-not $measure) {
+            Write-Host "::error title=Coverage missing::No coverage reported by SonarQube for $($env:SONAR_PROJECT_KEY) (coverage report not imported?)"
+            exit 1
+          }
+          $coverage = [double]::Parse($measure.value, $inv)
+          $msg = "SonarQube coverage for $($env:SONAR_PROJECT_KEY) : $($coverage.ToString('0.0', $inv)) % (required minimum: $($min.ToString('0.#', $inv)) %)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### $msg"
+          if ($coverage -lt $min) {
+            Write-Host "::error title=Coverage too low::$msg"
+            exit 1
+          }
+          Write-Host $msg
 
       - name: Downloading Quality Gates report
         if: always()
@@ -241,11 +278,13 @@ jobs:
   # the push to Docker Hub happens only on main so that `latest` is always the
   # production version. Each push is also tagged with the commit sha.
   # Required secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN.
+  # Runs only if build, unit tests and E2E passed and the sonar job passed or was skipped (SONAR_ENABLED not 'true').
   # ─────────────────────────────────────────────────────────────────────────────
   docker:
     name: Docker image
     runs-on: ubuntu-latest
-    needs: [build, test, e2e]
+    needs: [build, test, e2e, sonar]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.test.result == 'success' && needs.e2e.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.sonar.result) }}
     env:
       IMAGE: selimdrici/front-mspr-2
       PUSH: ${{ github.ref_name == 'main' && github.event_name == 'push' }}
